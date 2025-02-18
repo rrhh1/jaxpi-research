@@ -11,7 +11,7 @@ from jax.tree_util import tree_map
 import numpy as np
 import scipy.io
 import ml_collections
-import wandb
+# import wandb
 
 from jaxpi.samplers import UniformSampler
 from jaxpi.logging import Logger
@@ -38,6 +38,14 @@ def train_one_window(config, workdir, model, res_sampler, u_ref, v_ref, idx):
         batch = next(res_sampler)
         model.state = model.step(model.state, batch)
 
+        # Prune and initiate params
+        if step != 0 and step % config.lt.prune_every_step == 0:
+            model.state, model.mask = model.prune_by_percentile(
+                model.state, model.mask, config.lt.prune_percentage
+            )
+
+            model.state = model.original_initialiaztion(model.state, model.mask)
+
         # Update weights if necessary
         if config.weighting.scheme in ["grad_norm", "ntk"]:
             if step % config.weighting.update_every_steps == 0:
@@ -50,7 +58,7 @@ def train_one_window(config, workdir, model, res_sampler, u_ref, v_ref, idx):
                 state = jax.device_get(tree_map(lambda x: x[0], model.state))
                 batch = jax.device_get(tree_map(lambda x: x[0], batch))
                 log_dict = evaluator(state, batch, u_ref, v_ref)
-                wandb.log(log_dict, step + step_offset)
+                # wandb.log(log_dict, step + step_offset)
 
                 end_time = time.time()
                 logger.log_iter(step, start_time, end_time, log_dict)
@@ -67,8 +75,8 @@ def train_one_window(config, workdir, model, res_sampler, u_ref, v_ref, idx):
 
 
 def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
-    wandb_config = config.wandb
-    wandb.init(project=wandb_config.project, name=wandb_config.name)
+    # wandb_config = config.wandb
+    # wandb.init(project=wandb_config.project, name=wandb_config.name)
 
     u_ref, v_ref, t_star, x_star, y_star, b1, b2, c1, c2, eps1, eps2 = get_dataset(
         config.time_fraction
@@ -108,7 +116,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
         if config.use_pi_init:
             logging.info("Use physics-informed initialization...")
 
-            model = models.GreyScott(
+            model = models.LotteryTicketGreyScott(
                 config, t, x_star, y_star, u0, v0, b1, b2, c1, c2, eps1, eps2
             )
             state = jax.device_get(tree_map(lambda x: x[0], model.state))
@@ -149,7 +157,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
             del model, state, params
 
         # Initialize the model
-        model = models.GreyScott(
+        model = models.LotteryTicketGreyScott(
             config, t, x_star, y_star, u0, v0, b1, b2, c1, c2, eps1, eps2
         )
 

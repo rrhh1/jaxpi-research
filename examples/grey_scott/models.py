@@ -12,6 +12,8 @@ from jaxpi.models import ForwardIVP
 from jaxpi.evaluator import BaseEvaluator
 from jaxpi.utils import ntk_fn
 
+import copy
+
 
 class GreyScott(ForwardIVP):
     def __init__(
@@ -236,3 +238,88 @@ class GreyScottEvaluator(BaseEvaluator):
                 self.log_dict[f"alpha_{i}"] = state.params["params"][key]["alpha"]
 
         return self.log_dict
+    
+# ======================================================================================================== #
+
+def pirate_get_dense_layers(params):
+    layers = []
+    for key1, param1 in params['params'].items():
+        if 'PIModifiedBottleneck' in key1:
+            for key2, param2 in param1.items():
+                if 'Dense' in key2:
+                    layers.append(param2)
+    
+    return layers
+
+
+def make_mask(state):
+    step = 0
+    
+    # need to adjust for model
+    layers = pirate_get_dense_layers(state.params)
+    
+    for param in layers:
+        step += 1
+
+    mask = [None] * step
+    
+    step = 0
+    for param in layers:
+        value = param['kernel'][0]
+        mask[step] = jnp.ones_like(value)
+            
+        step += 1
+
+    return mask
+
+
+class LotteryTicketGreyScott(GreyScott):
+    def __init__(
+        self, config, t_star, x_star, y_star, u0, v0, b1, b2, c1, c2, eps1, eps2
+    ):
+        
+        super().__init__(config, t_star, x_star, y_star, u0, v0, b1, b2, c1, c2, eps1, eps2)
+
+        self.mask = make_mask(self.state)
+        self.init_params = copy.deepcopy(self.state.params)
+
+    
+    def prune_by_percentile(self, state, mask, percent):
+        step = 0
+
+        layers = pirate_get_dense_layers(state.params)
+        for param in layers:
+            value = param['kernel'][0]
+            alive = value[jnp.nonzero(value)]
+
+            percentile_value = jnp.percentile(abs(alive), percent)
+            new_mask = jnp.where(abs(value) < percentile_value, 0, mask[step])
+
+            param['kernel'] = value * new_mask
+            mask[step] = new_mask
+
+            step += 1
+
+        return state, mask
+    
+
+    def original_initialiaztion(self, state, mask):
+        step = 0
+
+        curr_layers = pirate_get_dense_layers(state.params)
+        init_layers = pirate_get_dense_layers(self.init_params)
+
+        for curr_param, init_param in zip(curr_layers, init_layers):
+            if 'kernel' in curr_param:
+                curr_param['kernel'] = mask[step] * init_param['kernel'][0]
+                step += 1
+
+            if 'bias' in curr_param:
+                curr_param['bias'] = init_param['bias']
+
+        return state
+
+
+
+
+
