@@ -2,7 +2,7 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-from jax import random, lax, jit, grad, vmap, jacrev, hessian
+from jax import random, lax, jit, grad, vmap, jacrev, hessian, pmap
 from jax.tree_util import tree_map
 
 import optax
@@ -265,9 +265,10 @@ def make_mask(state):
     
     step = 0
     for param in layers:
-        value = param['kernel'][0]
-        mask[step] = jnp.ones_like(value)
-            
+        value1 = param['kernel'][0]
+        value2 = param['kernel'][1]
+
+        mask[step] = (jnp.ones_like(value1), jnp.ones_like(value2))
         step += 1
 
     return mask
@@ -289,14 +290,17 @@ class LotteryTicketGreyScott(GreyScott):
 
         layers = pirate_get_dense_layers(state.params)
         for param in layers:
-            value = param['kernel'][0]
-            alive = value[jnp.nonzero(value)]
+            value1 = param['kernel'][0]
+            value2 = param['kernel'][1]
+
+            alive = jnp.concat([value1[jnp.nonzero(value1)], value2[jnp.nonzero(value2)]])
 
             percentile_value = jnp.percentile(abs(alive), percent)
-            new_mask = jnp.where(abs(value) < percentile_value, 0, mask[step])
+            new_mask_1 = jnp.where(abs(value1) < percentile_value, 0, mask[step][0])
+            new_mask_2 = jnp.where(abs(value2) < percentile_value, 0, mask[step][1])
 
-            param['kernel'] = value * new_mask
-            mask[step] = new_mask
+            param['kernel'] = (value1 * new_mask_1, value2 * new_mask_2)
+            mask[step] = (new_mask_1, new_mask_2)
 
             step += 1
 
@@ -311,12 +315,39 @@ class LotteryTicketGreyScott(GreyScott):
 
         for curr_param, init_param in zip(curr_layers, init_layers):
             if 'kernel' in curr_param:
-                curr_param['kernel'] = mask[step] * init_param['kernel'][0]
+                curr_param['kernel'] = (
+                    mask[step][0] * init_param['kernel'][0],
+                    mask[step][1] * init_param['kernel'][1]
+                )
                 step += 1
 
             if 'bias' in curr_param:
                 curr_param['bias'] = init_param['bias']
 
+        return state
+
+
+    @partial(pmap, axis_name="batch", static_broadcasted_argnums=(0,))
+    def step(self, state, batch, *args):
+        grads = grad(self.loss)(state.params, state.weights, batch, *args)
+        grads = lax.pmean(grads, "batch")
+
+        EPS = 1e-6
+        
+        param_layers = pirate_get_dense_layers(state.params)
+        grad_layers = pirate_get_dense_layers(grads)
+
+        for param, _grad in zip(param_layers, grad_layers):
+            if 'kernel' in param:
+                value1 = param['kernel'][0]
+                value2 = param['kernel'][1]
+
+                _grad['kernel'] = (
+                    jnp.where(value1 < EPS, 0, _grad['kernel'][0]),
+                    jnp.where(value2 < EPS, 0, _grad['kernel'][1])
+                )
+        
+        state = state.apply_gradients(grads=grads)
         return state
 
 

@@ -93,8 +93,10 @@ def get_config():
 
     # Lottery Ticket Hyperparameters
     config.lt = lt = ml_collections.ConfigDict()
-    lt.prune_percentage = 20
-    lt.prune_every_step = 1000
+    # pune around 75% of original weights
+    # 100 * ((1 - (lt.prune_percentage / 100))^x)    where x = (training.max_steps / lt.prune_every_step) - 1
+    lt.prune_percentage = 10
+    lt.prune_every_step = 25000
     
 
     return config
