@@ -38,14 +38,6 @@ def train_one_window(config, workdir, model, res_sampler, u_ref, v_ref, idx):
         batch = next(res_sampler)
         model.state = model.step(model.state, batch)
 
-        # Prune and initiate params
-        if step != 0 and step % config.lt.prune_every_step == 0:
-            model.state, model.mask = model.prune_by_percentile(
-                model.state, model.mask, config.lt.prune_percentage
-            )
-
-            model.state = model.original_initialiaztion(model.state, model.mask)
-
         # Update weights if necessary
         if config.weighting.scheme in ["grad_norm", "ntk"]:
             if step % config.weighting.update_every_steps == 0:
@@ -62,6 +54,15 @@ def train_one_window(config, workdir, model, res_sampler, u_ref, v_ref, idx):
 
                 end_time = time.time()
                 logger.log_iter(step, start_time, end_time, log_dict)
+
+        # Prune and initiate params
+        if step == config.training.max_steps - 1:
+            model.state, model.mask = model.prune_by_percentile(
+                model.state, model.mask, config.lt.prune_percentage
+            )
+
+            model.state = model.original_initialiaztion(model.state, model.mask)
+
 
         # Saving
         if config.saving.save_every_steps is not None:
