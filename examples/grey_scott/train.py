@@ -2,6 +2,7 @@ import time
 import os
 
 from absl import logging
+import copy
 
 import jax
 import jax.numpy as jnp
@@ -21,7 +22,7 @@ import models
 from utils import get_dataset
 
 
-def train_one_window(config, workdir, model, res_sampler, u_ref, v_ref, idx):
+def train_one_window(config, workdir, model, res_sampler, u_ref, v_ref, idx, init_model):
     step_offset = idx * config.training.max_steps
 
     # Logger
@@ -39,7 +40,7 @@ def train_one_window(config, workdir, model, res_sampler, u_ref, v_ref, idx):
         model.state = model.step(model.state, batch)
 
         # Prune and initiate params
-        if step != 0 and step % config.lt.prune_every_step == 0:
+        if init_model == True and step != 0 and step % config.lt.prune_every_step == 0:
             model.state, model.mask = model.prune_by_percentile(
                 model.state, model.mask, config.lt.prune_percentage
             )
@@ -52,7 +53,7 @@ def train_one_window(config, workdir, model, res_sampler, u_ref, v_ref, idx):
                 model.state = model.update_weights(model.state, batch)
 
         # Log training metrics, only use host 0 to record results
-        if jax.process_index() == 0:
+        if init_model == False and jax.process_index() == 0:
             if step % config.logging.log_every_steps == 0:
                 # Get the first replica of the state and batch
                 state = jax.device_get(tree_map(lambda x: x[0], model.state))
@@ -64,7 +65,7 @@ def train_one_window(config, workdir, model, res_sampler, u_ref, v_ref, idx):
                 logger.log_iter(step, start_time, end_time, log_dict)
 
         # Saving
-        if config.saving.save_every_steps is not None:
+        if init_model == False and config.saving.save_every_steps is not None:
             if (step + 1) % config.saving.save_every_steps == 0 or (
                 step + 1
             ) == config.training.max_steps:
@@ -157,21 +158,38 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
             del model, state, params
 
         # Initialize the model
-        model = models.LotteryTicketGreyScott(
+        init_model = models.LotteryTicketGreyScott(
             config, t, x_star, y_star, u0, v0, b1, b2, c1, c2, eps1, eps2
         )
 
         # Training the current time window
-        model = train_one_window(
-            config, workdir, model, res_sampler, u_star, v_star, idx
+        init_model = train_one_window(
+            config, workdir, init_model, res_sampler, u_star, v_star, idx, True
         )
+
+        # Revert unpruned parameters back to original initialization
+        init_model = init_model.original_initialiaztion(init_model.state, init_model.mask)
+
+        # create pruned version of init model
+        pruned_model = models.LotteryTicketGreyScott(
+            config, t, x_star, y_star, u0, v0, b1, b2, c1, c2, eps1, eps2
+        )
+
+        # Apply original init model parameters to pruned model and delete init model
+        pruned_model.state.params = copy.deepcopy(init_model.state.params)
+        del init_model
+
+        pruned_model = train_one_window(
+            config, workdir, pruned_model, res_sampler, u_star, v_star, idx, False
+        )
+
 
         #  Update the initial condition for the next time window
         if config.training.num_time_windows > 1:
-            state = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], model.state))
+            state = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], pruned_model.state))
             params = state.params
 
-            u0 = model.u0_pred_fn(params, t_star[num_time_steps], x_star, y_star)
-            v0 = model.v0_pred_fn(params, t_star[num_time_steps], x_star, y_star)
+            u0 = pruned_model.u0_pred_fn(params, t_star[num_time_steps], x_star, y_star)
+            v0 = pruned_model.v0_pred_fn(params, t_star[num_time_steps], x_star, y_star)
 
-            del model, state, params
+            del pruned_model, state, params

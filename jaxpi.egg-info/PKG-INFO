@@ -38,20 +38,20 @@ relative $L^2$ error between the predicted and true solutions.
 
 | **Benchmark** | PirateNet             | JAX-PI                |     
 |---------------|-----------------------|-----------------------|
-| Allen-Cahn    | $2.24 \times 10^{−5}$ | $5.37 \times 10^{−5}$ |
-| Korteweg–De Vries  | $4.27 \times 10^{−4}$ | $1.96 \times 10^{−3}$ |
-| Gray-Scott    | $3.61 \times 10^{−3}$ | $6.13$                |
-| Ginzburg-Landau | $1.49 \times 10^{−2}$ | $3.20 \times 10^{−2}$ |
-| Lid-driven cavity flow (Re=3200) | $4.21 \times 10^{−2}$ | $1.58 \times 10^{−1}$ |
+| Allen-Cahn    | $2.24 \times 10^{âˆ’5}$ | $5.37 \times 10^{âˆ’5}$ |
+| Kortewegâ€“De Vries  | $4.27 \times 10^{âˆ’4}$ | $1.96 \times 10^{âˆ’3}$ |
+| Gray-Scott    | $3.61 \times 10^{âˆ’3}$ | $6.13$                |
+| Ginzburg-Landau | $1.49 \times 10^{âˆ’2}$ | $3.20 \times 10^{âˆ’2}$ |
+| Lid-driven cavity flow (Re=3200) | $4.21 \times 10^{âˆ’2}$ | $1.58 \times 10^{âˆ’1}$ |
 
 
 ### Grey-Scott
 
 ![Grey-Scott](examples/grey_scott/figures/gs_animation.gif)
 
-### Ginzburg–Landau
+### Ginzburgâ€“Landau
 
-![Ginzburg–Landau](examples/ginzburg_landau/figures/gl_animation.gif)
+![Ginzburgâ€“Landau](examples/ginzburg_landau/figures/gl_animation.gif)
 
 
 
