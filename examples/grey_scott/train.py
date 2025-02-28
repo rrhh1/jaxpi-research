@@ -176,7 +176,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
         )
 
         # Apply original init model parameters to pruned model and delete init model
-        pruned_model.state.params = copy.deepcopy(init_model.state.params)
+        pruned_model.state = pruned_model.state.replace(params=copy.deepcopy(init_model.state.params))
         del init_model
 
         pruned_model = train_one_window(
