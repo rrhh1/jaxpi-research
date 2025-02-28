@@ -168,7 +168,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
         )
 
         # Revert unpruned parameters back to original initialization
-        init_model = init_model.original_initialiaztion(init_model.state, init_model.mask)
+        init_model.state = init_model.original_initialiaztion(init_model.state, init_model.mask)
 
         # create pruned version of init model
         pruned_model = models.LotteryTicketGreyScott(
