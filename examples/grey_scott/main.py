@@ -15,6 +15,7 @@ jax.config.update("jax_default_matmul_precision", "highest")
 
 import train
 import eval
+import save_weight_dict
 
 FLAGS = flags.FLAGS
 
@@ -34,6 +35,10 @@ def main(argv):
 
     elif FLAGS.config.mode == "eval":
         eval.evaluate(FLAGS.config, FLAGS.workdir)
+
+    elif FLAGS.config.mode == "save":
+        save_weight_dict.save_weight_dict(FLAGS.config, FLAGS.workdir)
+        
 
 
 if __name__ == "__main__":

@@ -112,7 +112,7 @@ def evaluate(config: ml_collections.ConfigDict, workdir: str):
         plt.title("Absolute error")
         plt.tight_layout()
 
-        fig_path = os.path.join(save_dir, f"gs_u_{str(i)}.pdf")
+        fig_path = os.path.join(save_dir, f"gs_u_{str(i)}.png")
         fig.savefig(fig_path, bbox_inches="tight", dpi=300)
 
         plt.clf()
@@ -142,7 +142,7 @@ def evaluate(config: ml_collections.ConfigDict, workdir: str):
         plt.title("Absolute error")
         plt.tight_layout()
 
-        fig_path = os.path.join(save_dir, f"gs_v_{str(i)}.pdf")
+        fig_path = os.path.join(save_dir, f"gs_v_{str(i)}.png")
         fig.savefig(fig_path, bbox_inches="tight", dpi=300)
 
         plt.clf()

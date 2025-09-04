@@ -244,6 +244,8 @@ class GreyScottEvaluator(BaseEvaluator):
 def pirate_get_dense_layers(params):
     layers = []
     for key1, param1 in params['params'].items():
+        if 'Dense' in key1:
+            layers.append(param1)
         if 'PIModifiedBottleneck' in key1:
             for key2, param2 in param1.items():
                 if 'Dense' in key2:
@@ -293,11 +295,14 @@ class LotteryTicketGreyScott(GreyScott):
             value1 = param['kernel'][0]
             value2 = param['kernel'][1]
 
-            alive = jnp.concat([value1[jnp.nonzero(value1)], value2[jnp.nonzero(value2)]])
+            alive1 = value1[jnp.nonzero(mask[step][0])]
+            alive2 = value2[jnp.nonzero(mask[step][1])]
 
-            percentile_value = jnp.percentile(abs(alive), percent)
-            new_mask_1 = jnp.where(abs(value1) < percentile_value, 0, mask[step][0])
-            new_mask_2 = jnp.where(abs(value2) < percentile_value, 0, mask[step][1])
+            percentile_value1 = jnp.percentile(jnp.abs(alive1), percent)
+            percentile_value2 = jnp.percentile(jnp.abs(alive2), percent)
+
+            new_mask_1 = jnp.where(jnp.abs(value1) < percentile_value1, 0, mask[step][0])
+            new_mask_2 = jnp.where(jnp.abs(value2) < percentile_value2, 0, mask[step][1])
 
             param['kernel'] = (value1 * new_mask_1, value2 * new_mask_2)
             mask[step] = (new_mask_1, new_mask_2)
@@ -337,15 +342,20 @@ class LotteryTicketGreyScott(GreyScott):
         param_layers = pirate_get_dense_layers(state.params)
         grad_layers = pirate_get_dense_layers(grads)
 
+        s = 0
         for param, _grad in zip(param_layers, grad_layers):
             if 'kernel' in param:
                 value1 = param['kernel'][0]
                 value2 = param['kernel'][1]
 
                 _grad['kernel'] = (
-                    jnp.where(value1 < EPS, 0, _grad['kernel'][0]),
-                    jnp.where(value2 < EPS, 0, _grad['kernel'][1])
+                    # jnp.where(value1 < EPS, 0, _grad['kernel'][0]),
+                    # jnp.where(value2 < EPS, 0, _grad['kernel'][1])
+                    jnp.squeeze(self.mask[s][0] * _grad['kernel'][0], 0),
+                    jnp.squeeze(self.mask[s][1] * _grad['kernel'][1], 0)
                 )
+
+                s += 1
         
         state = state.apply_gradients(grads=grads)
         return state

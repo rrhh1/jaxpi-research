@@ -7,7 +7,7 @@ def get_config():
     """Get the default hyperparameter configuration."""
     config = ml_collections.ConfigDict()
 
-    config.mode = "train"
+    config.mode = "eval"
 
     # Weights & Biases
     config.wandb = wandb = ml_collections.ConfigDict()
@@ -96,7 +96,7 @@ def get_config():
     # pune around 75% of original weights
     # 100 * ((1 - (lt.prune_percentage / 100))^x)    where x = (training.max_steps / lt.prune_every_step) - 1
     lt.prune_percentage = 10
-    lt.prune_every_step = 25000
+    lt.prune_every_step = 7500
     
 
     return config
