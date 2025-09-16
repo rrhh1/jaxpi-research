@@ -148,6 +148,7 @@ class PINN:
         weighted_losses = tree_map(lambda x, y: x * y, losses, weights)
         # Sum weighted losses
         loss = tree_reduce(lambda x, y: x + y, weighted_losses)
+        
         return loss
 
     @partial(jit, static_argnums=(0,))

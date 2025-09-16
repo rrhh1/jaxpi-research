@@ -108,17 +108,44 @@ class Embedding(nn.Module):
         return x
 
 
+
+class BinaryStep:
+    @jax.custom_vjp
+    def step(input):
+        return jnp.float32(input > 0)
+    
+    def step_fwd(input):
+        return jnp.float32(input > 0), input
+    
+    def step_bwd(residual, g):
+        x = residual
+        x_dot = jnp.copy(g)
+
+        zero_index = jnp.abs(x) > 1
+        middle_index = (jnp.abs(x) <= 1) * (jnp.abs(x) > 0.4)
+        additional = 2 - (4 * jnp.abs(x))
+        additional = additional.astype(jnp.float32)
+        additional = jnp.where(zero_index, 0.0, additional)
+        additional = jnp.where(middle_index, 0.4, additional)
+
+        ans_dot = x_dot * additional
+        return (ans_dot,)
+    
+    step.defvjp(step_fwd, step_bwd)  
+
+
 class Dense(nn.Module):
     features: int
     kernel_init: Callable = glorot_normal()
     bias_init: Callable = zeros
     reparam: Union[None, Dict] = None
+    step: Callable = BinaryStep.step
 
     @nn.compact
     def __call__(self, x):
         if self.reparam is None:
             kernel = self.param(
-                "kernel", self.kernel_init, (x.shape[-1], self.features)
+                "kernel", self.kernel_init, (self.features, x.shape[-1])
             )
 
         elif self.reparam["type"] == "weight_fact":
@@ -129,14 +156,39 @@ class Dense(nn.Module):
                     mean=self.reparam["mean"],
                     stddev=self.reparam["stddev"],
                 ),
-                (x.shape[-1], self.features),
+                (self.features, x.shape[-1]),
             )
             kernel = g * v
 
         bias = self.param("bias", self.bias_init, (self.features,))
+        threshold = self.param("threshold", zeros, (self.features))
 
-        y = jnp.dot(x, kernel) + bias
+        abs_kernel = jnp.abs(kernel)
+        threshold_value = jnp.reshape(threshold, (self.features, 1))
+        abs_kernel = abs_kernel - threshold_value
 
+        mask = self.step(abs_kernel)
+        ratio = jnp.sum(mask) / mask.size
+
+        def create_new_mask(threshold_value):
+            abs_kernel = jnp.abs(kernel)
+            new_threshold_value = jnp.reshape(threshold_value, (self.features, 1))
+            abs_kernel = abs_kernel - new_threshold_value
+
+            return self.step(abs_kernel)
+        
+        threshold = jax.lax.cond(
+            ratio <= 0.01,
+            lambda x: jnp.zeros_like(x),
+            lambda x: x,
+            threshold
+        )
+
+        mask = jnp.where(ratio <= 0.01, create_new_mask(threshold), mask)
+
+        masked_kernel = kernel * mask
+        y = jnp.dot(x, masked_kernel.T) + bias
+    
         return y
 
 
@@ -375,8 +427,36 @@ class PirateNet(nn.Module):
             )(x, u, v)
 
         if self.pi_init is not None:
-            kernel = self.param("pi_init", constant(self.pi_init), self.pi_init.shape)
-            y = jnp.dot(x, kernel)
+            kernel = self.param("pi_init", constant(self.pi_init.T), (self.pi_init.shape[1], self.pi_init.shape[0]))
+            threshold = self.param("threshold", zeros, (self.pi_init.shape[1]))
+
+            abs_kernel = jnp.abs(kernel)
+            threshold_value = jnp.reshape(threshold, (self.pi_init.shape[1], 1))
+            abs_kernel = abs_kernel - threshold_value
+
+            mask = self.step(abs_kernel)
+            ratio = jnp.sum(mask) / mask.size
+
+            def create_new_mask(threshold_value):
+                abs_kernel = jnp.abs(kernel)
+                new_threshold_value = jnp.reshape(threshold_value, (self.pi_init.shape[1], 1))
+                abs_kernel = abs_kernel - new_threshold_value
+
+                return self.step(abs_kernel)
+
+            threshold = jax.lax.cond(
+                ratio <= 0.01,
+                lambda x: jnp.zeros_like(x),
+                lambda x: x,
+                threshold
+            )
+
+            mask = jnp.where(ratio <= 0.01, create_new_mask(threshold), mask)
+
+            masked_kernel = kernel * mask
+            y = jnp.dot(x, masked_kernel.T)
+
+            return y
 
         else:
             y = Dense(features=self.out_dim, reparam=self.reparam)(x)

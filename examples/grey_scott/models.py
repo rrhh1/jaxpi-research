@@ -114,6 +114,19 @@ class GreyScott(ForwardIVP):
         gamma = gamma.min(0)
 
         return ru_l, rv_l, gamma
+    
+    def get_thresholds(self, params):
+        thresholds = []
+        for key1, param in params["params"].items():
+            if 'Dense' in key1:
+                thresholds.append(param["threshold"])
+        
+            elif 'PIModifiedBottleneck' in key1:
+                for key2, subparam in param.items():
+                    if 'Dense' in key2:
+                        thresholds.append(subparam["threshold"])
+
+        return thresholds
 
     @partial(jit, static_argnums=(0,))
     def losses(self, params, batch):
@@ -138,11 +151,19 @@ class GreyScott(ForwardIVP):
             ru_loss = jnp.mean(ru_pred**2)
             rv_loss = jnp.mean(rv_pred**2)
 
+        # Threshold loss for DST
+        thresholds = self.get_threshold(params)
+        threshold_loss = 0
+
+        for threshold in thresholds:
+            threshold_loss += self.config.dst.alpha * jnp.sum(jnp.exp(-1 * threshold))
+
         loss_dict = {
             "u_ic": u0_loss,
             "v_ic": v0_loss,
             "ru": ru_loss,
             "rv": rv_loss,
+            "threshold": threshold_loss,
         }
         return loss_dict
 
