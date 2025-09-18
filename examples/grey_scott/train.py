@@ -11,7 +11,7 @@ from jax.tree_util import tree_map
 import numpy as np
 import scipy.io
 import ml_collections
-import wandb
+# import wandb
 
 from jaxpi.samplers import UniformSampler
 from jaxpi.logging import Logger
@@ -56,7 +56,7 @@ def train_one_window(config, workdir, model, res_sampler, u_ref, v_ref, idx):
                 state = jax.device_get(tree_map(lambda x: x[0], model.state))
                 batch = jax.device_get(tree_map(lambda x: x[0], batch))
                 log_dict = evaluator(state, batch, u_ref, v_ref)
-                wandb.log(log_dict, step + step_offset)
+                # wandb.log(log_dict, step + step_offset)
 
                 end_time = time.time()
                 logger.log_iter(step, start_time, end_time, log_dict)
@@ -73,8 +73,8 @@ def train_one_window(config, workdir, model, res_sampler, u_ref, v_ref, idx):
 
 
 def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
-    wandb_config = config.wandb
-    wandb.init(project=wandb_config.project, name=wandb_config.name)
+    # wandb_config = config.wandb
+    # wandb.init(project=wandb_config.project, name=wandb_config.name)
 
     u_ref, v_ref, t_star, x_star, y_star, b1, b2, c1, c2, eps1, eps2 = get_dataset(
         config.time_fraction
