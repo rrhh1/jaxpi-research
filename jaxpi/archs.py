@@ -168,25 +168,25 @@ class Dense(nn.Module):
         abs_kernel = abs_kernel - threshold_value
 
         mask = self.step(abs_kernel)
-        ratio = jnp.sum(mask) / mask.size
+        # ratio = jnp.sum(mask) / mask.size
 
-        def create_new_mask(threshold_value):
-            abs_kernel = jnp.abs(kernel)
-            new_threshold_value = jnp.reshape(threshold_value, (self.features, 1))
-            abs_kernel = abs_kernel - new_threshold_value
+        # def create_new_mask(threshold_value):
+        #     abs_kernel = jnp.abs(kernel)
+        #     new_threshold_value = jnp.reshape(threshold_value, (self.features, 1))
+        #     abs_kernel = abs_kernel - new_threshold_value
 
-            return self.step(abs_kernel)
+        #     return self.step(abs_kernel)
         
-        threshold = jax.lax.cond(
-            ratio <= 0.01,
-            lambda x: jnp.zeros_like(x),
-            lambda x: x,
-            threshold
-        )
+        # threshold = jax.lax.cond(
+        #     ratio <= 0.01,
+        #     lambda x: jnp.zeros_like(x),
+        #     lambda x: x,
+        #     threshold
+        # )
 
-        mask = jnp.where(ratio <= 0.01, create_new_mask(threshold), mask)
+        # mask = jnp.where(ratio <= 0.01, create_new_mask(threshold), mask)
 
-        masked_kernel = kernel * mask
+        # masked_kernel = kernel * mask
         y = jnp.dot(x, masked_kernel.T) + bias
     
         return y
