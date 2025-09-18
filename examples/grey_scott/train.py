@@ -18,7 +18,7 @@ from jaxpi.logging import Logger
 from jaxpi.utils import save_checkpoint
 
 import models
-from utils import get_dataset
+from utils import get_dataset, print_ratios
 
 
 def train_one_window(config, workdir, model, res_sampler, u_ref, v_ref, idx):
@@ -37,6 +37,12 @@ def train_one_window(config, workdir, model, res_sampler, u_ref, v_ref, idx):
 
         batch = next(res_sampler)
         model.state = model.step(model.state, batch)
+
+        # Log ratios for DST
+        if config.dst.log_ratio_every_steps is not None:
+            if (step + 1) % config.dst.log_ratio_every_steps == 0 or (step + 1) == config.training.max_steps:
+                state = jax.device_get(tree_map(lambda x: x[0], model.state))
+                print_ratios(state.params, idx, step + 1 + step_offset)
 
         # Update weights if necessary
         if config.weighting.scheme in ["grad_norm", "ntk"]:

@@ -402,6 +402,7 @@ class PirateNet(nn.Module):
     fourier_emb: Union[None, Dict] = None
     reparam: Union[None, Dict] = None
     pi_init: Union[None, jnp.ndarray] = None
+    step: Callable = BinaryStep.step
 
     def setup(self):
         self.activation_fn = _get_activation(self.activation)
@@ -455,8 +456,6 @@ class PirateNet(nn.Module):
 
             masked_kernel = kernel * mask
             y = jnp.dot(x, masked_kernel.T)
-
-            return y
 
         else:
             y = Dense(features=self.out_dim, reparam=self.reparam)(x)

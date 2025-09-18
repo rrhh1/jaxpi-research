@@ -2,7 +2,7 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-from jax import random, lax, jit, grad, vmap, jacrev, hessian
+from jax import random, lax, jit, grad, vmap, jacrev, hessian, pmap
 from jax.tree_util import tree_map
 
 import optax
@@ -11,6 +11,8 @@ from jaxpi import archs
 from jaxpi.models import ForwardIVP
 from jaxpi.evaluator import BaseEvaluator
 from jaxpi.utils import ntk_fn
+
+from flax.core import freeze, unfreeze
 
 
 class GreyScott(ForwardIVP):
@@ -127,7 +129,7 @@ class GreyScott(ForwardIVP):
                         thresholds.append(subparam["threshold"])
 
         return thresholds
-
+    
     @partial(jit, static_argnums=(0,))
     def losses(self, params, batch):
         # Initial conditions loss
@@ -152,7 +154,7 @@ class GreyScott(ForwardIVP):
             rv_loss = jnp.mean(rv_pred**2)
 
         # Threshold loss for DST
-        thresholds = self.get_threshold(params)
+        thresholds = self.get_thresholds(params)
         threshold_loss = 0
 
         for threshold in thresholds:
@@ -215,6 +217,72 @@ class GreyScott(ForwardIVP):
         v_error = jnp.linalg.norm(v_pred - v_ref) / jnp.linalg.norm(v_ref)
 
         return u_error, v_error
+
+
+    @partial(jit, static_argnums=(0,))
+    def update_thresholds(self, state):
+        params = state.params
+        dense_layers = {
+            "Dense_0": params["params"]["Dense_0"],
+            "Dense_1": params["params"]["Dense_1"],
+
+            "PIModifiedBottleneck_0_Dense_0": params["params"]["PIModifiedBottleneck_0"]["Dense_0"],
+            "PIModifiedBottleneck_0_Dense_1": params["params"]["PIModifiedBottleneck_0"]["Dense_1"],
+            "PIModifiedBottleneck_1_Dense_2": params["params"]["PIModifiedBottleneck_0"]["Dense_2"],
+
+            "PIModifiedBottleneck_1_Dense_0": params["params"]["PIModifiedBottleneck_1"]["Dense_0"],
+            "PIModifiedBottleneck_1_Dense_1": params["params"]["PIModifiedBottleneck_1"]["Dense_1"],
+            "PIModifiedBottleneck_1_Dense_2": params["params"]["PIModifiedBottleneck_1"]["Dense_2"],
+
+            "PIModifiedBottleneck_2_Dense_0": params["params"]["PIModifiedBottleneck_2"]["Dense_0"],
+            "PIModifiedBottleneck_2_Dense_1": params["params"]["PIModifiedBottleneck_2"]["Dense_1"],
+            "PIModifiedBottleneck_2_Dense_2": params["params"]["PIModifiedBottleneck_2"]["Dense_2"],
+        }
+
+        def binary_step(input):
+            return jnp.float32(input > 0)
+        
+        for key, layer in dense_layers.items():
+            abs_kernel = jnp.abs(layer["kernel"][1])
+            threshold_value = jnp.reshape(layer["threshold"], (abs_kernel.shape[0], 1))
+            abs_kernel = abs_kernel - threshold_value
+
+            mask = binary_step(abs_kernel)
+            ratio = jnp.sum(mask) / mask.size
+
+            layer["threshold"] = jax.lax.cond(
+                ratio <= 0.01,
+                lambda x: jnp.zeros_like(x),
+                lambda x: x,
+                layer["threshold"]
+            )
+
+        abs_kernel = jnp.abs(params["params"]["pi_init"])
+        threshold_value = jnp.reshape(params["params"]["threshold"], (abs_kernel.shape[0], 1))
+        abs_kernel = abs_kernel - threshold_value
+
+        mask = binary_step(abs_kernel)
+        ratio = jnp.sum(mask) / mask.size
+
+        params["params"]["threshold"] = jax.lax.cond(
+            ratio <= 0.01,
+            lambda x: jnp.zeros_like(x),
+            lambda x: x,
+            params["params"]["threshold"]
+        )
+
+        return state.replace(params=params)
+        
+
+
+    @partial(pmap, axis_name="batch", static_broadcasted_argnums=(0,))
+    def step(self, state, batch, *args):
+        state = self.update_thresholds(state)
+
+        grads = grad(self.loss)(state.params, state.weights, batch, *args)
+        grads = lax.pmean(grads, "batch")
+        state = state.apply_gradients(grads=grads)
+        return state
 
 
 class GreyScottEvaluator(BaseEvaluator):
