@@ -186,7 +186,7 @@ class Dense(nn.Module):
 
         # mask = jnp.where(ratio <= 0.01, create_new_mask(threshold), mask)
 
-        # masked_kernel = kernel * mask
+        masked_kernel = kernel * mask
         y = jnp.dot(x, masked_kernel.T) + bias
     
         return y
