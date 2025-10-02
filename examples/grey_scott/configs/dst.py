@@ -7,7 +7,7 @@ def get_config():
     """Get the default hyperparameter configuration."""
     config = ml_collections.ConfigDict()
 
-    config.mode = "train"
+    config.mode = "eval"
 
     # Weights & Biases
     config.wandb = wandb = ml_collections.ConfigDict()
@@ -60,7 +60,7 @@ def get_config():
     config.weighting = weighting = ml_collections.ConfigDict()
     weighting.scheme = "grad_norm"
     weighting.init_weights = ml_collections.ConfigDict(
-        {"u_ic": 1.0, "v_ic": 1.0, "ru": 1.0, "rv": 1.0, "threshold": 1.0}
+        {"u_ic": 1.0, "v_ic": 1.0, "ru": 1.0, "rv": 1.0}
     )
     weighting.momentum = 0.9
     weighting.update_every_steps = 1000
@@ -93,7 +93,7 @@ def get_config():
     
     # Dynamic Sparse Training
     config.dst = dst = ml_collections.ConfigDict()
-    dst.alpha = 5e-6
+    dst.alpha = 1e-6
     dst.log_ratio_every_steps = 1000
 
     return config

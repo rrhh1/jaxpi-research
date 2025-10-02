@@ -3,7 +3,7 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 from jax import random, lax, jit, grad, vmap, jacrev, hessian, pmap
-from jax.tree_util import tree_map
+from jax.tree_util import tree_map, tree_reduce, tree_leaves
 
 import optax
 
@@ -153,6 +153,32 @@ class GreyScott(ForwardIVP):
             ru_loss = jnp.mean(ru_pred**2)
             rv_loss = jnp.mean(rv_pred**2)
 
+        # # Threshold loss for DST
+        # thresholds = self.get_thresholds(params)
+        # threshold_loss = 0
+
+        # for threshold in thresholds:
+        #     threshold_loss += self.config.dst.alpha * jnp.sum(jnp.exp(-1 * threshold))
+
+        loss_dict = {
+            "u_ic": u0_loss,
+            "v_ic": v0_loss,
+            "ru": ru_loss,
+            "rv": rv_loss,
+            # "threshold": threshold_loss,
+        }
+        return loss_dict
+
+
+    @partial(jit, static_argnums=(0,))
+    def loss(self, params, weights, batch, *args):
+        # Compute losses
+        losses = self.losses(params, batch, *args)
+        # Compute weighted loss
+        weighted_losses = tree_map(lambda x, y: x * y, losses, weights)
+        # Sum weighted losses
+        loss = tree_reduce(lambda x, y: x + y, weighted_losses)
+
         # Threshold loss for DST
         thresholds = self.get_thresholds(params)
         threshold_loss = 0
@@ -160,14 +186,10 @@ class GreyScott(ForwardIVP):
         for threshold in thresholds:
             threshold_loss += self.config.dst.alpha * jnp.sum(jnp.exp(-1 * threshold))
 
-        loss_dict = {
-            "u_ic": u0_loss,
-            "v_ic": v0_loss,
-            "ru": ru_loss,
-            "rv": rv_loss,
-            "threshold": threshold_loss,
-        }
-        return loss_dict
+        loss += threshold_loss
+        
+        return loss
+
 
     @partial(jit, static_argnums=(0,))
     def compute_diag_ntk(self, params, batch):
@@ -272,16 +294,15 @@ class GreyScott(ForwardIVP):
         )
 
         return state.replace(params=params)
-        
 
 
     @partial(pmap, axis_name="batch", static_broadcasted_argnums=(0,))
     def step(self, state, batch, *args):
-        state = self.update_thresholds(state)
-
         grads = grad(self.loss)(state.params, state.weights, batch, *args)
         grads = lax.pmean(grads, "batch")
         state = state.apply_gradients(grads=grads)
+        
+        state = self.update_thresholds(state)
         return state
 
 

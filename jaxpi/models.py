@@ -148,6 +148,15 @@ class PINN:
         weighted_losses = tree_map(lambda x, y: x * y, losses, weights)
         # Sum weighted losses
         loss = tree_reduce(lambda x, y: x + y, weighted_losses)
+
+        # Threshold loss for DST
+        thresholds = self.get_thresholds(params)
+        threshold_loss = 0
+
+        for threshold in thresholds:
+            threshold_loss += self.config.dst.alpha * jnp.sum(jnp.exp(-1 * threshold))
+
+        loss += threshold_loss
         
         return loss
 

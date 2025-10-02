@@ -61,7 +61,7 @@ def print_ratios(params, idx, step):
 
     for key, layer in dense_layers.items():
         abs_kernel = jnp.abs(layer["kernel"][1])
-        threshold_value = jnp.reshape(layer["threshold"], (abs_kernel.shape[1], 1))
+        threshold_value = jnp.reshape(layer["threshold"], (abs_kernel.shape[0], 1))
         abs_kernel = abs_kernel - threshold_value
 
         mask = binary_step(abs_kernel)
@@ -69,7 +69,7 @@ def print_ratios(params, idx, step):
 
         def create_new_mask(threshold_value):
             abs_kernel = jnp.abs(layer["kernel"][1])
-            new_threshold_value = jnp.reshape(threshold_value, (abs_kernel.shape[1], 1))
+            new_threshold_value = jnp.reshape(threshold_value, (abs_kernel.shape[0], 1))
             abs_kernel = abs_kernel - new_threshold_value
 
             return binary_step(abs_kernel)
@@ -82,6 +82,7 @@ def print_ratios(params, idx, step):
         )
 
         mask = jnp.where(ratio <= 0.01, create_new_mask(threshold), mask)
+        ratio = jnp.sum(mask) / mask.size
 
         total += mask.size
         keep += jnp.sum(mask)
@@ -92,7 +93,7 @@ def print_ratios(params, idx, step):
     threshold = params["params"]["threshold"]
 
     abs_kernel = jnp.abs(pi_init)
-    threshold_value = jnp.reshape(threshold, (abs_kernel.shape[1], 1))
+    threshold_value = jnp.reshape(threshold, (abs_kernel.shape[0], 1))
     abs_kernel = abs_kernel - threshold_value
 
     mask = binary_step(abs_kernel)
@@ -100,7 +101,7 @@ def print_ratios(params, idx, step):
 
     def create_new_mask(threshold_value):
         abs_kernel = jnp.abs(pi_init)
-        new_threshold_value = jnp.reshape(threshold_value, (abs_kernel.shape[1], 1))
+        new_threshold_value = jnp.reshape(threshold_value, (abs_kernel.shape[0], 1))
         abs_kernel = abs_kernel - new_threshold_value
 
         return binary_step(abs_kernel)
@@ -113,11 +114,13 @@ def print_ratios(params, idx, step):
     )
 
     mask = jnp.where(ratio <= 0.01, create_new_mask(threshold), mask)
+    ratio = jnp.sum(mask) / mask.size
+
     total += mask.size
     keep += jnp.sum(mask)
 
     file.write("Pi_init ratio: " + str(ratio) + "\n")
 
     file.write("Overall ratio: " + str(keep / total) + "\n")
-    file.write("=" * 20 + "\n")
+    file.write("=" * 30 + "\n")
     file.close()
