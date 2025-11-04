@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 
 def get_dataset(fraction):
-    data = scipy.io.loadmat("data/grey_scott.mat")
+    data = scipy.io.loadmat("data/grey_scott_2.mat")
 
     u_ref = data["usol"]
     v_ref = data["vsol"]
@@ -38,7 +38,7 @@ def print_ratios(params, idx, step):
 
         "PIModifiedBottleneck_0_Dense_0": params["params"]["PIModifiedBottleneck_0"]["Dense_0"],
         "PIModifiedBottleneck_0_Dense_1": params["params"]["PIModifiedBottleneck_0"]["Dense_1"],
-        "PIModifiedBottleneck_1_Dense_2": params["params"]["PIModifiedBottleneck_0"]["Dense_2"],
+        "PIModifiedBottleneck_0_Dense_2": params["params"]["PIModifiedBottleneck_0"]["Dense_2"],
 
         "PIModifiedBottleneck_1_Dense_0": params["params"]["PIModifiedBottleneck_1"]["Dense_0"],
         "PIModifiedBottleneck_1_Dense_1": params["params"]["PIModifiedBottleneck_1"]["Dense_1"],
@@ -62,7 +62,8 @@ def print_ratios(params, idx, step):
     for key, layer in dense_layers.items():
         abs_kernel = jnp.abs(layer["kernel"][1])
         threshold_value = jnp.reshape(layer["threshold"], (abs_kernel.shape[0], 1))
-        abs_kernel = abs_kernel - threshold_value
+        scale = layer["scale"]
+        abs_kernel = (scale * abs_kernel) - threshold_value
 
         mask = binary_step(abs_kernel)
         ratio = jnp.sum(mask) / mask.size
@@ -70,7 +71,8 @@ def print_ratios(params, idx, step):
         def create_new_mask(threshold_value):
             abs_kernel = jnp.abs(layer["kernel"][1])
             new_threshold_value = jnp.reshape(threshold_value, (abs_kernel.shape[0], 1))
-            abs_kernel = abs_kernel - new_threshold_value
+            scale = layer["scale"]
+            abs_kernel = (scale * abs_kernel) - new_threshold_value
 
             return binary_step(abs_kernel)
 
@@ -91,10 +93,11 @@ def print_ratios(params, idx, step):
 
     pi_init = params["params"]["pi_init"]
     threshold = params["params"]["threshold"]
+    scale = params["params"]["scale"]
 
     abs_kernel = jnp.abs(pi_init)
     threshold_value = jnp.reshape(threshold, (abs_kernel.shape[0], 1))
-    abs_kernel = abs_kernel - threshold_value
+    abs_kernel = (scale * abs_kernel) - threshold_value
 
     mask = binary_step(abs_kernel)
     ratio = jnp.sum(mask) / mask.size
@@ -102,7 +105,7 @@ def print_ratios(params, idx, step):
     def create_new_mask(threshold_value):
         abs_kernel = jnp.abs(pi_init)
         new_threshold_value = jnp.reshape(threshold_value, (abs_kernel.shape[0], 1))
-        abs_kernel = abs_kernel - new_threshold_value
+        abs_kernel = (scale * abs_kernel) - new_threshold_value
 
         return binary_step(abs_kernel)
 

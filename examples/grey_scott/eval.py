@@ -1,4 +1,5 @@
 import os
+import time
 
 from absl import logging
 import ml_collections
@@ -39,6 +40,7 @@ def evaluate(config: ml_collections.ConfigDict, workdir: str):
     u_pred_list = []
     v_pred_list = []
 
+    file = open("window_inference_times.txt", "w")
     for idx in range(config.training.num_time_windows):
         # Get the reference solution for the current time window
         u_star = u_ref[num_time_steps * idx: num_time_steps * (idx + 1), :, :]
@@ -61,11 +63,20 @@ def evaluate(config: ml_collections.ConfigDict, workdir: str):
                 )
             )
 
+        start_time = time.time()
+
         u_pred = model.u_pred_fn(params, model.t_star, model.x_star, model.y_star)
         v_pred = model.v_pred_fn(params, model.t_star, model.x_star, model.y_star)
 
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+
+        file.write(f"Window {idx}: {elapsed_time} seconds\n")
+
         u_pred_list.append(u_pred)
         v_pred_list.append(v_pred)
+
+    file.close()
 
     # Get the full prediction
     u_pred = jnp.concatenate(u_pred_list, axis=0)

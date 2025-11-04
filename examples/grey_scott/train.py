@@ -159,10 +159,25 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
             config, t, x_star, y_star, u0, v0, b1, b2, c1, c2, eps1, eps2
         )
 
+        # window_start_time = time.time()
+
         # Training the current time window
         model = train_one_window(
             config, workdir, model, res_sampler, u_star, v_star, idx
         )
+
+        # window_end_time = time.time()
+        # elapsed_time = window_end_time - window_start_time
+        
+        # hours = int(elapsed_time // 3600)
+        # minutes = int((elapsed_time % 3600) // 60)
+        # seconds = int(elapsed_time % 60)
+
+        # # Format as hh-mm-ss
+        # formatted_time = f"{hours:02d}-{minutes:02d}-{seconds:02d}"
+
+        # with open("window_train_times.txt", "a") as file:
+        #     file.write(f"Time Window {idx}: {formatted_time}\n")
 
         #  Update the initial condition for the next time window
         if config.training.num_time_windows > 1:

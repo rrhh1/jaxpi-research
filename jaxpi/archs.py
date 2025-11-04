@@ -8,7 +8,7 @@ from flax.core.frozen_dict import freeze
 import jax
 from jax import random, jit, vmap
 import jax.numpy as jnp
-from jax.nn.initializers import glorot_normal, normal, zeros, constant
+from jax.nn.initializers import glorot_normal, normal, zeros, constant, ones
 
 activation_fn = {
     "relu": nn.relu,
@@ -162,10 +162,11 @@ class Dense(nn.Module):
 
         bias = self.param("bias", self.bias_init, (self.features,))
         threshold = self.param("threshold", zeros, (self.features))
+        scale = self.param("scale", ones, (self.features, x.shape[-1]))
 
         abs_kernel = jnp.abs(kernel)
         threshold_value = jnp.reshape(threshold, (self.features, 1))
-        abs_kernel = abs_kernel - threshold_value
+        abs_kernel = (scale * abs_kernel) - threshold_value        
 
         mask = self.step(abs_kernel)
         # ratio = jnp.sum(mask) / mask.size
@@ -430,30 +431,13 @@ class PirateNet(nn.Module):
         if self.pi_init is not None:
             kernel = self.param("pi_init", constant(self.pi_init.T), (self.pi_init.shape[1], self.pi_init.shape[0]))
             threshold = self.param("threshold", zeros, (self.pi_init.shape[1]))
+            scale = self.param("scale", ones, (self.pi_init.shape[1], self.pi_init.shape[0]))
 
             abs_kernel = jnp.abs(kernel)
             threshold_value = jnp.reshape(threshold, (self.pi_init.shape[1], 1))
-            abs_kernel = abs_kernel - threshold_value
+            abs_kernel = (scale * abs_kernel) - threshold_value
 
             mask = self.step(abs_kernel)
-            ratio = jnp.sum(mask) / mask.size
-
-            def create_new_mask(threshold_value):
-                abs_kernel = jnp.abs(kernel)
-                new_threshold_value = jnp.reshape(threshold_value, (self.pi_init.shape[1], 1))
-                abs_kernel = abs_kernel - new_threshold_value
-
-                return self.step(abs_kernel)
-
-            threshold = jax.lax.cond(
-                ratio <= 0.01,
-                lambda x: jnp.zeros_like(x),
-                lambda x: x,
-                threshold
-            )
-
-            mask = jnp.where(ratio <= 0.01, create_new_mask(threshold), mask)
-
             masked_kernel = kernel * mask
             y = jnp.dot(x, masked_kernel.T)
 

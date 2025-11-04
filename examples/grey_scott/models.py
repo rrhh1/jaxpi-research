@@ -250,7 +250,7 @@ class GreyScott(ForwardIVP):
 
             "PIModifiedBottleneck_0_Dense_0": params["params"]["PIModifiedBottleneck_0"]["Dense_0"],
             "PIModifiedBottleneck_0_Dense_1": params["params"]["PIModifiedBottleneck_0"]["Dense_1"],
-            "PIModifiedBottleneck_1_Dense_2": params["params"]["PIModifiedBottleneck_0"]["Dense_2"],
+            "PIModifiedBottleneck_0_Dense_2": params["params"]["PIModifiedBottleneck_0"]["Dense_2"],
 
             "PIModifiedBottleneck_1_Dense_0": params["params"]["PIModifiedBottleneck_1"]["Dense_0"],
             "PIModifiedBottleneck_1_Dense_1": params["params"]["PIModifiedBottleneck_1"]["Dense_1"],
@@ -267,7 +267,8 @@ class GreyScott(ForwardIVP):
         for key, layer in dense_layers.items():
             abs_kernel = jnp.abs(layer["kernel"][1])
             threshold_value = jnp.reshape(layer["threshold"], (abs_kernel.shape[0], 1))
-            abs_kernel = abs_kernel - threshold_value
+            scale = layer["scale"]
+            abs_kernel = (scale * abs_kernel) - threshold_value
 
             mask = binary_step(abs_kernel)
             ratio = jnp.sum(mask) / mask.size
@@ -281,7 +282,8 @@ class GreyScott(ForwardIVP):
 
         abs_kernel = jnp.abs(params["params"]["pi_init"])
         threshold_value = jnp.reshape(params["params"]["threshold"], (abs_kernel.shape[0], 1))
-        abs_kernel = abs_kernel - threshold_value
+        scale = params["params"]["scale"]
+        abs_kernel = (scale * abs_kernel) - threshold_value
 
         mask = binary_step(abs_kernel)
         ratio = jnp.sum(mask) / mask.size
