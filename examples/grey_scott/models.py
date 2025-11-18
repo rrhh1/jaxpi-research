@@ -267,8 +267,7 @@ class GreyScott(ForwardIVP):
         for key, layer in dense_layers.items():
             abs_kernel = jnp.abs(layer["kernel"][1])
             threshold_value = jnp.reshape(layer["threshold"], (abs_kernel.shape[0], 1))
-            scale = layer["scale"]
-            abs_kernel = (scale * abs_kernel) - threshold_value
+            abs_kernel = abs_kernel - threshold_value
 
             mask = binary_step(abs_kernel)
             ratio = jnp.sum(mask) / mask.size
@@ -282,8 +281,7 @@ class GreyScott(ForwardIVP):
 
         abs_kernel = jnp.abs(params["params"]["pi_init"])
         threshold_value = jnp.reshape(params["params"]["threshold"], (abs_kernel.shape[0], 1))
-        scale = params["params"]["scale"]
-        abs_kernel = (scale * abs_kernel) - threshold_value
+        abs_kernel = abs_kernel - threshold_value
 
         mask = binary_step(abs_kernel)
         ratio = jnp.sum(mask) / mask.size

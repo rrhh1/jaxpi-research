@@ -162,11 +162,10 @@ class Dense(nn.Module):
 
         bias = self.param("bias", self.bias_init, (self.features,))
         threshold = self.param("threshold", zeros, (self.features))
-        scale = self.param("scale", ones, (self.features, x.shape[-1]))
 
         abs_kernel = jnp.abs(kernel)
         threshold_value = jnp.reshape(threshold, (self.features, 1))
-        abs_kernel = (scale * abs_kernel) - threshold_value        
+        abs_kernel = abs_kernel - threshold_value        
 
         mask = self.step(abs_kernel)
         # ratio = jnp.sum(mask) / mask.size
@@ -431,11 +430,10 @@ class PirateNet(nn.Module):
         if self.pi_init is not None:
             kernel = self.param("pi_init", constant(self.pi_init.T), (self.pi_init.shape[1], self.pi_init.shape[0]))
             threshold = self.param("threshold", zeros, (self.pi_init.shape[1]))
-            scale = self.param("scale", ones, (self.pi_init.shape[1], self.pi_init.shape[0]))
 
             abs_kernel = jnp.abs(kernel)
             threshold_value = jnp.reshape(threshold, (self.pi_init.shape[1], 1))
-            abs_kernel = (scale * abs_kernel) - threshold_value
+            abs_kernel = abs_kernel - threshold_value
 
             mask = self.step(abs_kernel)
             masked_kernel = kernel * mask

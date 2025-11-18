@@ -93,7 +93,7 @@ def get_config():
     
     # Dynamic Sparse Training
     config.dst = dst = ml_collections.ConfigDict()
-    dst.alpha = 5e-12
+    dst.alpha = 5e-7
     dst.log_ratio_every_steps = 1000
 
     return config
